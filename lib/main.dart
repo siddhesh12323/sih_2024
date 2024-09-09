@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:sih_1/presentation/animations/page_transition.dart';
 import 'package:sih_1/presentation/routes/routes.dart';
 import 'package:sih_1/presentation/utils/permission_checker.dart';
+import 'package:sih_1/providers/beach_data_provider.dart';
 import 'package:sih_1/providers/permission_provider.dart';
 import 'package:sih_1/providers/search_provider.dart';
 
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
         providers: [
           ChangeNotifierProvider(create: (context) => PermissionProvider()),
           ChangeNotifierProvider(create: (context) => SearchFilterProvider()),
+          ChangeNotifierProvider(create: (context) => BeachDataProvider()),
         ],
         builder: (context, child) {
           return MaterialApp(
@@ -31,8 +33,17 @@ class MyApp extends StatelessWidget {
                 },
               ),
             ),
+            // darkTheme: ThemeData(
+            //   brightness: Brightness.dark,
+            //   pageTransitionsTheme: PageTransitionsTheme(
+            //     builders: {
+            //       TargetPlatform.android: CustomPageTransitionsBuilder(),
+            //       TargetPlatform.iOS: CustomPageTransitionsBuilder(),
+            //     },
+            //   ),
+            // ),
             onGenerateRoute: (settings) => _appRouter.onGenerateRoute(settings),
-            title: 'Flutter Demo',
+            title: 'ShoreAlert',
             debugShowCheckedModeBanner: false,
             home: const PermissionChecker(),
           );

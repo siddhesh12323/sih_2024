@@ -1,12 +1,12 @@
-import 'dart:convert';
-import 'dart:developer';
-import 'package:http/http.dart' as http;
+// ignore_for_file: avoid_unnecessary_containers
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:sih_1/models/beach_data_model.dart';
+import 'package:sih_1/presentation/utils/calculate_safety_index_and_verdict.dart';
+import 'package:sih_1/providers/beach_data_provider.dart';
 import 'package:sih_1/providers/search_provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,36 +21,37 @@ class _HomeScreenState extends State<HomeScreen> {
   // LatLng _currentLocation = LatLng(20.5937, 78.9629);
   final MapController _mapController = MapController();
   // bool _locationLoaded = false;
-  final List<BeachDataList> _beachDataList = [];
+  // final List<BeachDataList> _beachDataList = [];
 
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   _getCurrentLocation();
-  // }
-
-  Future<List<BeachDataList>> fetchData() async {
-    final response = await http.get(
-      Uri.parse('https://shi2024-api.onrender.com/get_beach_data'),
-    );
-    var data = jsonDecode(response.body.toString());
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      for (var i in data) {
-        _beachDataList.add(BeachDataList.fromJson(i));
-      }
-      return _beachDataList;
-    } else {
-      // If the server returns an error, throw an exception
-      throw Exception('Failed to load data');
-    }
+  @override
+  void initState() {
+    super.initState();
+    // Fetch the beach data when the screen initializes
+    Provider.of<BeachDataProvider>(context, listen: false).fetchBeachData();
   }
+
+  // Future<List<BeachDataList>> fetchData() async {
+  //   final response = await http.get(
+  //     Uri.parse('https://shi2024-api.onrender.com/get_beach_data'),
+  //   );
+  //   var data = jsonDecode(response.body.toString());
+
+  //   if (response.statusCode == 200 || response.statusCode == 201) {
+  //     for (var i in data) {
+  //       _beachDataList.add(BeachDataList.fromJson(i));
+  //     }
+  //     return _beachDataList;
+  //   } else {
+  //     // If the server returns an error, throw an exception
+  //     throw Exception('Failed to load data');
+  //   }
+  // }
 
   final List<String> _filterOptions = [
     'Beach Name',
     'City/Area Name',
     'State Name',
-    'Coordinates (just type latitude, longitude)',
+    'Coordinates',
   ];
 
   @override
@@ -60,10 +61,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: const Text('App Name'),
+        title: const Text('ShoreAlert'),
         actions: [
           IconButton(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.pushNamed(context, '/about_screen');
+            },
             icon: const Icon(Icons.question_mark),
           ),
         ],
@@ -71,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Stack(
         children: [
           FutureBuilder<List<BeachDataList>>(
-              future: fetchData(),
+              future: Provider.of<BeachDataProvider>(context).fetchBeachData(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -82,76 +85,204 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Text('Error: ${snapshot.error}'),
                   );
                 } else {
-                  var data = snapshot.data!;
-                  log(data.toString());
-                  return FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: LatLng(20.5937, 78.9629),
-                      initialZoom: 4,
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  return Consumer<BeachDataProvider>(
+                      builder: (context, provider, child) {
+                    return FlutterMap(
+                      mapController: _mapController,
+                      options: const MapOptions(
+                        initialCenter: LatLng(20.5937, 78.9629),
+                        initialZoom: 4,
                       ),
-                      for (var beach in data)
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              width: 80.0,
-                              height: 80.0,
-                              point: LatLng(beach.beachPosition!.lat!,
-                                  beach.beachPosition!.long!),
-                              // ignore: avoid_unnecessary_containers
-                              child: GestureDetector(
-                                onTap: () {
-                                  showModalBottomSheet(
-                                      context: context,
-                                      builder: (context) {
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Image.network(beach.image!),
-                                            Row(
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        ),
+                        for (int i = 0; i < provider.beachDataList.length; i++)
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                width: 80.0,
+                                height: 80.0,
+                                point: LatLng(
+                                    provider
+                                        .beachDataList[i].beachPosition!.lat!,
+                                    provider
+                                        .beachDataList[i].beachPosition!.long!),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    showModalBottomSheet(
+                                        context: context,
+                                        builder: (context) {
+                                          return Container(
+                                            height: 650,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                SizedBox(
-                                                  width: 10,
-                                                  height: 10,
+                                                Image.network(
+                                                  provider
+                                                      .beachDataList[i].image!,
+                                                  width:
+                                                      MediaQuery.sizeOf(context)
+                                                          .width,
+                                                  // height: 100,
                                                 ),
-                                                const Icon(Icons.location_on),
-                                                Text(
-                                                    '${beach.beachPosition!.lat}, ${beach.beachPosition!.long}'),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.fromLTRB(
+                                                          16, 12, 16, 16),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          Expanded(
+                                                            flex: 12,
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Text(
+                                                                  provider
+                                                                      .beachDataList[
+                                                                          i]
+                                                                      .beachName!,
+                                                                  style: const TextStyle(
+                                                                      fontSize:
+                                                                          20,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold),
+                                                                ),
+                                                                Text(
+                                                                    "${provider.beachDataList[i].area![0]}, ${provider.beachDataList[i].state!}"),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          const Spacer(),
+                                                          const Icon(Icons
+                                                              .location_on),
+                                                          Expanded(
+                                                            flex: 5,
+                                                            child: Text(
+                                                                '${provider.beachDataList[i].beachPosition!.lat}, ${provider.beachDataList[i].beachPosition!.long}',
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .visible,
+                                                                style:
+                                                                    const TextStyle(
+                                                                        fontSize:
+                                                                            16)),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
+                                                      Row(
+                                                        children: [
+                                                          const Text(
+                                                            "Safety Index ",
+                                                            style: TextStyle(
+                                                                fontSize: 16),
+                                                          ),
+                                                          const Spacer(),
+                                                          Text(
+                                                            getBeachVerdict(
+                                                                    provider.beachDataList[
+                                                                        i])[0]
+                                                                .toString(),
+                                                            style:
+                                                                const TextStyle(
+                                                              fontSize: 16,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
+                                                      Text(
+                                                        getBeachVerdict(provider
+                                                                .beachDataList[
+                                                            i])[1] as String,
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
+                                                      GestureDetector(
+                                                        onTap: () {
+                                                          Navigator.pop(
+                                                              context);
+                                                          Navigator.pushNamed(
+                                                              context,
+                                                              '/beach_info_screen',
+                                                              arguments: {
+                                                                'beach_object':
+                                                                    provider
+                                                                        .beachDataList[i]
+                                                              });
+                                                        },
+                                                        child: Container(
+                                                          width:
+                                                              MediaQuery.sizeOf(
+                                                                      context)
+                                                                  .width,
+                                                          height: 40,
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors
+                                                                .blueAccent,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        20),
+                                                          ),
+                                                          child: const Center(
+                                                            child: Text(
+                                                              'View Details',
+                                                              style: TextStyle(
+                                                                  color: Colors
+                                                                      .white),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      )
+                                                    ],
+                                                  ),
+                                                ),
                                               ],
                                             ),
-                                            Text(beach.beachName!),
-                                            Text(beach.state!),
-                                            Text(beach.area![0]),
-                                            Text(beach.safetyFactor!
-                                                .safetyFactorValue!
-                                                .toString()),
-                                            SizedBox(
-                                              height: 20,
-                                            )
-                                          ],
-                                        );
-                                      });
-                                },
-                                child: Container(
-                                  child: const Icon(
-                                    Icons.location_on,
-                                    color: Colors.red,
-                                    size: 40.0,
+                                          );
+                                        });
+                                  },
+                                  child: Container(
+                                    child: Icon(
+                                      Icons.location_on,
+                                      color: getBeachVerdict(
+                                              provider.beachDataList[i])[2]
+                                          as Color,
+                                      size: 40.0,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                    ],
-                  );
+                            ],
+                          ),
+                      ],
+                    );
+                  });
                 }
               }),
           Align(
@@ -218,6 +349,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                               searchFilterProvider
                                                   .setFilterBy(value!);
                                               Navigator.pop(context);
+                                              SnackBar snackBar = SnackBar(
+                                                content: Text(
+                                                    'You are searching by $value'),
+                                                duration: const Duration(
+                                                    milliseconds: 1500),
+                                              );
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(snackBar);
                                             },
                                           ),
                                         const SizedBox(height: 30),
@@ -233,9 +372,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           return IconButton(
                             onPressed: () {
                               if (_searchController.text.isEmpty) {
-                                SnackBar snackBar = SnackBar(
-                                  content: const Text(
-                                      'Please enter a search query to proceed.'),
+                                SnackBar snackBar = const SnackBar(
+                                  content: Text(
+                                      'You need to type something to search!'),
                                 );
                                 ScaffoldMessenger.of(context)
                                     .showSnackBar(snackBar);
@@ -243,13 +382,17 @@ class _HomeScreenState extends State<HomeScreen> {
                               }
                               searchFilterProvider
                                   .setSearchText(_searchController.text);
-                              Navigator.pushNamed(context, '/search_screen');
-                              SnackBar snackBar = SnackBar(
-                                content: Text(
-                                    'Searching for ${_searchController.text} by ${searchFilterProvider.filterBy}'),
-                              );
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(snackBar);
+                              Navigator.pushNamed(context, '/search_screen',
+                                  arguments: {
+                                    'search_query': _searchController.text,
+                                    'filter_by': searchFilterProvider.filterBy,
+                                  });
+                              // SnackBar snackBar = SnackBar(
+                              //   content: Text(
+                              //       'Searching for ${_searchController.text} by ${searchFilterProvider.filterBy}'),
+                              // );
+                              // ScaffoldMessenger.of(context)
+                              //     .showSnackBar(snackBar);
                             },
                             icon: const Icon(Icons.search),
                           );
